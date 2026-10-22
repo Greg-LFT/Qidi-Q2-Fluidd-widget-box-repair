@@ -2,6 +2,10 @@
 
 Client-side patch for the Material Control (Qidi Box) widget in Fluidd, designed for Qidi Q2 and compatible printers following recent firmware updates.
 
+## AI Disclosure
+
+This project was developed with the assistance of AI for reverse-engineering the minified Fluidd bundle and drafting the patch, and was tested and verified on physical hardware (Qidi Q2).
+
 ---
 
 ## Overview
