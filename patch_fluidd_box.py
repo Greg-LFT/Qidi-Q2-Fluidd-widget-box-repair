@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Fluidd Material Box Patch for Qidi Q2 / Plus 4 / Q1 Pro
+Fluidd Material Box Patch for Qidi Q2
 Repository: https://github.com/Greg-LFT/Qidi-Q2-Fluidd-widget-box-repair
 License: MIT
 """
