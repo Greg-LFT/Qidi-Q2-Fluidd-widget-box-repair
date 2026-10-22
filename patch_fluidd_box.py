@@ -4,6 +4,7 @@ Fluidd Material Box Patch for Qidi Q2
 Repository: https://github.com/Greg-LFT/Qidi-Q2-Fluidd-widget-box-repair
 License: MIT
 """
+# Developed with AI assistance and validated on Qidi Q2 hardware.
 
 import os
 import glob
