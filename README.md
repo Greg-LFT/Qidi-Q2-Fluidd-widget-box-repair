@@ -6,7 +6,7 @@ Client-side patch for the Material Control (Qidi Box) widget in Fluidd, designed
 
 ## Overview
 
-Recent Qidi firmware releases updated the internal multi-color subsystem (`multi_color_controller.so`) to a new V2 data structure:
+01.01.03.01 Qidi firmware releases updated the internal multi-color subsystem (`multi_color_controller.so`) to a new V2 data structure:
 - Filament types are stored as profile identifier strings (e.g., `'QFA00'`, `'QFU01'`) instead of legacy integer indices.
 - Colors are stored as hexadecimal arrays (e.g., `['060606']`) instead of palette index integers.
 - G-code action macros were renamed (`LOAD_FILAMENT_CONTROL`, `UNLOAD_FILAMENT_CONTROL`, `EJECT_FILAMENT_CONTROL`, `READ_RFID`).
