@@ -11,13 +11,14 @@ This project was developed with the assistance of AI for reverse-engineering the
 ## Overview
 
 01.01.03.01 Qidi firmware releases updated the internal multi-color subsystem (`multi_color_controller.so`) to a new V2 data structure:
-- Filament types are stored as profile identifier strings (e.g., `'QFA00'`, `'QFU01'`) instead of legacy integer indices.
+- Filament types are stored as profile identifier strings (e.g., `'QFA00'`, `'QFL30'`) instead of legacy integer indices.
 - Colors are stored as hexadecimal arrays (e.g., `['060606']`) instead of palette index integers.
 - G-code action macros were renamed (`LOAD_FILAMENT_CONTROL`, `UNLOAD_FILAMENT_CONTROL`, `EJECT_FILAMENT_CONTROL`, `READ_RFID`).
 - Sensor reporting fields (`b_endstop_state`) were relocated.
 
 Because Fluidd's bundled frontend expected the legacy schema, the integrated Material Control widget exhibited several issues:
 - Empty or missing filament color and type indicators.
+- Missing third-party filament vendors available on the touchscreen (Bambu, Polymaker, HATCHBOX, Overture).
 - Inability to persist slot configuration changes without breaking synchronization with Qidi Studio and the touchscreen.
 - Non-functional control actions (Load, Unload, Eject, Read RFID).
 
@@ -26,9 +27,11 @@ Because Fluidd's bundled frontend expected the legacy schema, the integrated Mat
 ## Technical Details
 
 This patch modifies the client-side JavaScript bundle (`/home/qidi/fluidd/assets/index-*.js`) directly:
-1. **No backend modifications**: Klipper binaries, Cython shared libraries, and configuration files remain completely untouched.
-2. **Bidirectional translation**: Incoming V2 parameters are mapped to the UI, and user edits from Fluidd are converted to official V2 identifiers before sending `SAVE_VARIABLE` commands.
-3. **Safety and reversibility**: The patcher automatically creates a `.bak` copy prior to writing changes, allowing immediate rollback.
+1. **Full 6-Vendor Support**: Enables all official vendors available on the Q2 touchscreen (`QIDI`, `Generic`, `Bambu`, `Polymaker`, `HATCHBOX`, `Overture`).
+2. **Dynamic Filament Filtering**: Selecting a vendor automatically filters the filament dropdown to match that brand's specific catalog.
+3. **No backend modifications**: Klipper binaries, Cython shared libraries, and configuration files remain completely untouched.
+4. **Bidirectional translation**: Incoming V2 parameters are mapped to the UI, and user edits from Fluidd are converted to official V2 identifiers before sending `SAVE_VARIABLE` commands.
+5. **Safety and reversibility**: The patcher automatically creates a `.bak` copy prior to writing changes, allowing immediate rollback.
 
 ---
 
