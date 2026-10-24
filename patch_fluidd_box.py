@@ -11,23 +11,66 @@ import os
 import glob
 import sys
 import shutil
+import re
 
-ASSETS_DIR = "/home/qidi/fluidd/assets"
+FLUIDD_DIRS = [
+    "/home/qidi/fluidd",
+    "/home/mks/fluidd",
+    "/usr/share/fluidd"
+]
 
 # Catalogs for all 6 vendors supported by the Qidi Q2 firmware
 CAT_JSON = '{"QIDI":{"PLA Basic":"QFA00","PLA Matte Basic":"QFA01","PLA Rapido":"QFA02","PLA Rapido Matte":"QFA03","PLA Rapido Metal":"QFA04","PLA Silk":"QFA05","WOOD Rapido":"QFA16","PLA-CF":"QFA50","ASA":"QFB01","ASA-Aero":"QFB02","ABS-GF":"QFB50","ASA-CF20 Core":"QFB51","ABS Odorless":"QFB53","ABS Rapido":"QFB54","ABS Rapido Metal":"QFB55","PC/ABS-FR":"QFC02","PETG Basic":"QFG00","PETG Rapido":"QFG02","PETG Tough":"QFG03","PETG Translucent":"QFG04","PETG-CF":"QFG50","PETG-GF":"QFG51","PAHT-CF":"QFN04","PA6-CF":"QFN05","PA12-CF":"QFN12","PAHT-GF":"QFN14","UltraPA":"QFN20","UltraPA-CF25":"QFN21","PPS-CF":"QFP01","PPS-GF":"QFP02","Support For PET/PA":"QFS01","Support For PAHT":"QFS03","PET-CF":"QFT01","PET-GF":"QFT02","TPU-Aero":"QFU00","TPU 95A-HF":"QFU01","TPU-GF":"QFU02","PEBA 95A":"QFU03"},"Generic":{"ABS":"QFB91","PC":"QFC90","PETG":"QFG90","PLA":"QFA90","PLA Silk":"QFA92","PLA+":"QFA91","TPU 95A":"QFU91"},"Bambu":{"ABS":"QFL32","PETG":"QFL31","PLA":"QFL30"},"HATCHBOX":{"ABS":"QFL12","PETG":"QFL11","PLA":"QFL10"},"Overture":{"ABS":"QFL62","PLA":"QFL60"},"Polymaker":{"ABS":"QFL22","PLA":"QFL20","PLA-HT":"QFL24"}}'
 IDM_JSON = '{"QFA00":["QIDI","PLA Basic"],"QFA01":["QIDI","PLA Matte Basic"],"QFA02":["QIDI","PLA Rapido"],"QFA03":["QIDI","PLA Rapido Matte"],"QFA04":["QIDI","PLA Rapido Metal"],"QFA05":["QIDI","PLA Silk"],"QFA16":["QIDI","WOOD Rapido"],"QFA50":["QIDI","PLA-CF"],"QFB01":["QIDI","ASA"],"QFB02":["QIDI","ASA-Aero"],"QFB50":["QIDI","ABS-GF"],"QFB51":["QIDI","ASA-CF20 Core"],"QFB53":["QIDI","ABS Odorless"],"QFB54":["QIDI","ABS Rapido"],"QFB55":["QIDI","ABS Rapido Metal"],"QFC02":["QIDI","PC/ABS-FR"],"QFG00":["QIDI","PETG Basic"],"QFG02":["QIDI","PETG Rapido"],"QFG03":["QIDI","PETG Tough"],"QFG04":["QIDI","PETG Translucent"],"QFG50":["QIDI","PETG-CF"],"QFG51":["QIDI","PETG-GF"],"QFN04":["QIDI","PAHT-CF"],"QFN05":["QIDI","PA6-CF"],"QFN12":["QIDI","PA12-CF"],"QFN14":["QIDI","PAHT-GF"],"QFN20":["QIDI","UltraPA"],"QFN21":["QIDI","UltraPA-CF25"],"QFP01":["QIDI","PPS-CF"],"QFP02":["QIDI","PPS-GF"],"QFS01":["QIDI","Support For PET/PA"],"QFS03":["QIDI","Support For PAHT"],"QFT01":["QIDI","PET-CF"],"QFT02":["QIDI","PET-GF"],"QFU00":["QIDI","TPU-Aero"],"QFU01":["QIDI","TPU 95A-HF"],"QFU02":["QIDI","TPU-GF"],"QFU03":["QIDI","PEBA 95A"],"QFB91":["Generic","ABS"],"QFC90":["Generic","PC"],"QFG90":["Generic","PETG"],"QFA90":["Generic","PLA"],"QFA92":["Generic","PLA Silk"],"QFA91":["Generic","PLA+"],"QFU91":["Generic","TPU 95A"],"QFL32":["Bambu","ABS"],"QFL31":["Bambu","PETG"],"QFL30":["Bambu","PLA"],"QFL12":["HATCHBOX","ABS"],"QFL11":["HATCHBOX","PETG"],"QFL10":["HATCHBOX","PLA"],"QFL62":["Overture","ABS"],"QFL60":["Overture","PLA"],"QFL22":["Polymaker","ABS"],"QFL20":["Polymaker","PLA"],"QFL24":["Polymaker","PLA-HT"]}'
 
-def get_target_files():
-    files = glob.glob(os.path.join(ASSETS_DIR, "index-*.js"))
-    files = [f for f in files if not f.endswith(".bak")]
-    return files
+def find_active_bundle():
+    for fdir in FLUIDD_DIRS:
+        index_html = os.path.join(fdir, "index.html")
+        assets_dir = os.path.join(fdir, "assets")
+        if os.path.isfile(index_html) and os.path.isdir(assets_dir):
+            try:
+                with open(index_html, "r", encoding="utf-8") as f:
+                    content = f.read()
+                match = re.search(r'assets/(index-[^"]+\.js)', content)
+                if match:
+                    active_path = os.path.join(assets_dir, match.group(1))
+                    if os.path.isfile(active_path) or os.path.isfile(active_path + ".bak"):
+                        return active_path, assets_dir
+            except Exception:
+                pass
+
+    # Fallback to most recently modified index-*.js in known directories
+    for fdir in FLUIDD_DIRS:
+        assets_dir = os.path.join(fdir, "assets")
+        if os.path.isdir(assets_dir):
+            files = glob.glob(os.path.join(assets_dir, "index-*.js"))
+            files = [f for f in files if not f.endswith(".bak")]
+            if files:
+                files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+                return files[0], assets_dir
+
+    return None, None
+
+def check_permissions(target_path, assets_dir):
+    if not os.access(assets_dir, os.W_OK) or (os.path.exists(target_path) and not os.access(target_path, os.W_OK)):
+        print("[ERROR] Insufficient permissions to modify Fluidd files.")
+        print("[INFO] Please run this script with sudo:")
+        print("       curl -sSL https://raw.githubusercontent.com/Greg-LFT/Qidi-Q2-Fluidd-widget-box-repair/main/patch_fluidd_box.py | sudo python3")
+        sys.exit(1)
 
 def restore():
-    bak_files = glob.glob(os.path.join(ASSETS_DIR, "index-*.js.bak"))
+    target_file, assets_dir = find_active_bundle()
+    if not assets_dir:
+        print("[ERROR] Could not find Fluidd installation directory.")
+        sys.exit(1)
+
+    check_permissions(target_file if target_file else assets_dir, assets_dir)
+
+    bak_files = glob.glob(os.path.join(assets_dir, "index-*.js.bak"))
     if not bak_files:
         print("[ERROR] No backup file (.bak) found to restore.")
         sys.exit(1)
+
     for bak in bak_files:
         orig = bak[:-4]
         shutil.copyfile(bak, orig)
@@ -35,28 +78,28 @@ def restore():
     print("[INFO] Please hard-refresh your browser (Ctrl+F5).")
 
 def patch():
-    targets = get_target_files()
-    if not targets:
-        print(f"[ERROR] No index-*.js found in {ASSETS_DIR}")
+    target_file, assets_dir = find_active_bundle()
+    if not target_file:
+        print("[ERROR] Could not detect active Fluidd JavaScript bundle.")
         sys.exit(1)
 
-    js_path = targets[0]
-    print(f"[INFO] Target file: {js_path}")
+    print(f"[INFO] Active target bundle detected: {target_file}")
+    check_permissions(target_file, assets_dir)
 
-    with open(js_path, "r", encoding="utf-8") as f:
-        js = f.read()
-
-    bak_path = js_path + ".bak"
+    bak_path = target_file + ".bak"
     if not os.path.exists(bak_path):
-        with open(bak_path, "w", encoding="utf-8") as f:
-            f.write(js)
-        print(f"[OK] Backup created: {bak_path}")
+        try:
+            shutil.copyfile(target_file, bak_path)
+            print(f"[OK] Factory backup created: {bak_path}")
+        except PermissionError:
+            print("[ERROR] Permission denied creating backup. Please run with sudo.")
+            sys.exit(1)
     else:
         print(f"[INFO] Existing backup preserved: {bak_path}")
-        if "window._qFilaCat=" in js:
-            print("[INFO] File is currently patched. Re-reading from clean backup...")
-            with open(bak_path, "r", encoding="utf-8") as f:
-                js = f.read()
+
+    # Read clean content from backup to ensure repeatable, idempotent patching
+    with open(bak_path, "r", encoding="utf-8") as f:
+        js = f.read()
 
     # Target 1: isOkPrinter print dialog check
     t1 = 'get isOkPrinter(){return this.enableBox===!1?this.$store.state.printer.printer.box_extras.e_endstop_state===1?this.$store.state.printer.printer.box_extras.b_endstop_state===0?(this.error_msg=this.$t("app.file_system.tooltip.warning_text1"),!1):!0:(this.error_msg=this.$t("app.file_system.tooltip.warning_text2"),!1):(this.error_msg=this.$t("app.file_system.tooltip.warning_text"),this.usedExtruders.every(t=>this.selectedValueSlot[t]))}'
@@ -70,7 +113,7 @@ def patch():
     idx_end = js.find(t2_end, idx_start) if idx_start != -1 else -1
 
     if idx_start == -1 or idx_end == -1:
-        print("[ERROR] Target component code blocks not found. Firmware version may differ.")
+        print("[ERROR] Target component code blocks not found. File may differ from supported firmware.")
         sys.exit(1)
 
     t2 = js[idx_start:idx_end + len(t2_end)]
@@ -80,22 +123,4 @@ def patch():
     # Target 3: Vuex getVariables
     t3 = 'getVariables:r=>{var d,p,h,m;const e=((p=(d=r==null?void 0:r.printer)==null?void 0:d.save_variables)==null?void 0:p.variables)??{},t=e.box_count??0,s=[],n=[],i=[],a=new Array(17).fill(0),o=[],l=e.slot_sync??"",c=[e.color_slot16,e.filament_slot16,e.vendor_slot16],u=parseInt(((h=e.last_load_slot)==null?void 0:h.replace("slot",""))??"0",10);for(const g in e)if(Object.prototype.hasOwnProperty.call(e,g)){if(g.startsWith("color_slot")){const v=parseInt(g.replace("color_slot",""),10);s[v]=parseInt(e[g]??"0",10)}else if(g.startsWith("filament_slot")){const v=parseInt(g.replace("filament_slot",""),10);n[v]=parseInt(e[g]??"0",10)}else if(g.startsWith("vendor_slot")){const v=parseInt(g.replace("vendor_slot",""),10);i[v]=parseInt(e[g]??"0",10)}}for(let g=0;g<16;g++){const v=(m=r==null?void 0:r.printer)==null?void 0:m[`box_stepper slot${g}`];(v==null?void 0:v.runout_button)===0?a[g]=1:a[g]=0}return a[16]=1,{boxCount:t,colorSlot:s,filamentSlot:n,vendorSlot:i,slot:a,valueSlot:o,slotSync:l,rackExtra:c,lastLoadSlot:u}}'
 
-    r3 = f'''getVariables:r=>{{window._qFilaCat={CAT_JSON};window._qIdMap={IDM_JSON};var d,p,h,m;const e=((p=(d=r==null?void 0:r.printer)==null?void 0:d.save_variables)==null?void 0:p.variables)??{{}},t=e.box_count??0,s=[],n=[],i=[],fRaw=[],cHex=[],a=new Array(17).fill(0),o=[],l=e.slot_sync??"",u=parseInt(((h=e.last_load_slot)==null?void 0:h.replace("slot",""))??"0",10),qCols=["FAFAFA","060606","D9E3ED","5CF30F","63E492","2850FF","FE98FE","DFD628","228332","99DEFF","1714B0","CEC0FE","CADE4B","1353AB","5EA9FD","A878FF","FE717A","FF362D","E2DFCD","898F9B","6E3812","CAC59F","F28636","B87F2B"],parseCol=val=>{{let hx=(Array.isArray(val)?String(val[0]??""):String(val??"")).replace(/^#/,"").trim().toUpperCase();if(/^\\d+$/.test(hx)){{const num=parseInt(hx,10);if(num>=1&&num<=24&&hx.length<=2)return[num,"#"+qCols[num-1]]}}if(hx.length===6){{const ex=qCols.indexOf(hx);if(ex!==-1)return[ex+1,"#"+hx];return[1,"#"+hx]}}return[1,"#FAFAFA"]}};for(const g in e)if(Object.prototype.hasOwnProperty.call(e,g)){{if(g.startsWith("color_slot")){{const v=parseInt(g.replace("color_slot",""),10),[cIdx,cHx]=parseCol(e[g]);s[v]=cIdx,cHex[v]=cHx}}else if(g.startsWith("filament_slot")){{const v=parseInt(g.replace("filament_slot",""),10),raw=e[g];fRaw[v]=raw;if(typeof raw=="string"&&window._qIdMap[raw]){{n[v]=1;i[v]=window._qIdMap[raw][0]==="Generic"?0:1}}else{{n[v]=parseInt(raw??"1",10)||1}}}}else if(g.startsWith("vendor_slot")){{const v=parseInt(g.replace("vendor_slot",""),10);if(i[v]===void 0)i[v]=parseInt(e[g]??"0",10)}}}}const c=[s[16],n[16],i[16]];for(let g=0;g<16;g++){{const v=(m=r==null?void 0:r.printer)==null?void 0:m[`box_stepper slot${{g}}`];(v==null?void 0:v.runout_button)===0?a[g]=1:a[g]=0}}return a[16]=1,{{boxCount:t,colorSlot:s,filamentSlot:n,vendorSlot:i,filamentRaw:fRaw,colorHexes:cHex,slot:a,valueSlot:o,slotSync:l,rackExtra:c,lastLoadSlot:u}}}}'''
-
-    if js.count(t1) != 1 or js.count(t3) != 1:
-        print("[ERROR] Target code blocks not found. File may differ from supported firmware.")
-        sys.exit(1)
-
-    patched = js.replace(t1, r1).replace(t2, r2).replace(t3, r3)
-    with open(js_path, "w", encoding="utf-8") as f:
-        f.write(patched)
-
-    print("[OK] Extended multi-vendor patch successfully applied.")
-    print("[INFO] Supported vendors: QIDI, Generic, Bambu, Polymaker, HATCHBOX, Overture.")
-    print("[INFO] Please hard-refresh your browser (Ctrl+F5).")
-
-if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] in ("--restore", "-r", "restore"):
-        restore()
-    else:
-        patch()
+    r3 = f'''getVariables:r=>{{window._qFilaCat={CAT_JSON};window._qIdMap={IDM_JSON};var d,p,h,m;const e=((p=(d=r==null?void 0:r.printer)==null?void 0:d.save_variables)==null?void 0:p.variables)??{{}},t=e.box_count??
