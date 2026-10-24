@@ -47,7 +47,7 @@ ssh mks@<PRINTER_IP>
 
 ### Step 2: Execute the Patcher
 ```bash
-curl -sSL https://raw.githubusercontent.com/Greg-LFT/Qidi-Q2-Fluidd-widget-box-repair/main/patch_fluidd_box.py | sudo python3
+curl -sSL https://raw.githubusercontent.com/Greg-LFT/Qidi-Q2-Fluidd-widget-box-repair/main/patch_fluidd_box.py | python3
 ```
 
 ### Step 3: Clear Browser Cache
