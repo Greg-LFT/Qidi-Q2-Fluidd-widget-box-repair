@@ -68,7 +68,7 @@ curl -sSL https://raw.githubusercontent.com/Greg-LFT/Qidi-Q2-Fluidd-widget-box-r
 
 ### Method B: Manual shell restoration
 ```bash
-for f in /home/qidi/fluidd/assets/index-*.js.bak; do [ -f "$f" ] && cp -f "$f" "${f%.bak}" && echo "Restored $f"; done
+for f in /home/qidi/fluidd/assets/index-*.js.bak; do [ -f "$f" ] && sudo cp -f "$f" "${f%.bak}" && echo "Restored $f"; done
 ```
 
 After restoring, hard refresh the browser (`Ctrl + F5`).
