@@ -14,7 +14,7 @@ Version 2 builds on the approach of [Assur92/qidi-max4-fluidd-box-fix](https://g
 
 ## Overview
 
-01.01.03.01 Qidi firmware releases updated the internal multi-color subsystem (`multi_color_controller.so`) to a new V2 data structure:
+Since 01.01.03.01 firmware update, Qidi updated the internal multi-color subsystem (`multi_color_controller.so`) to a new V2 data structure:
 - Filament types are stored as profile identifier strings (e.g., `'QFA00'`, `'QFL30'`) instead of legacy integer indices.
 - Colors are stored as hexadecimal arrays (e.g., `['060606']`) instead of palette index integers.
 - G-code action macros were renamed (`LOAD_FILAMENT_CONTROL`, `UNLOAD_FILAMENT_CONTROL`, `EJECT_FILAMENT_CONTROL`, `READ_RFID`).
