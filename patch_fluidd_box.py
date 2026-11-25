@@ -35,7 +35,7 @@ import sys
 import tempfile
 import urllib.request
 
-VERSION = "qdv2-1"
+VERSION = "qdv2-2"
 # Markers used to recognise a file that is not the factory original:
 # V2 (this script), V1 of this repository, Assur92's patch.
 MARKERS = ("qdv2-", "_qFilaCat", "qd-box-fix-")
@@ -234,15 +234,57 @@ def js_members():
     return JS_MEMBERS.replace("__QD_FALLBACK__", fallback).replace("__QD_LINK__", DB_LINK_NAME)
 
 
+def gcode_api(js):
+    """Minified name of Fluidd's G-code helper object: "I" in index-DlFvHGAh.js,
+    "R" in index-nyEzQB9T.js (Qidi firmware 01.01.03.04)."""
+    m = re.search(r'const n=\["E_BOX","E_LOAD","E_UNLOAD"\];([\w$]+)\.printerGcodeScript', js)
+    return (m.group(1) if m else "I") + ".printerGcodeScript"
+
+
+def build_edits(js):
+    """BUNDLE_EDITS adapted to the minified names of this Fluidd build."""
+    api = gcode_api(js)
+    return [(a.replace("I.printerGcodeScript", api), r.replace("I.printerGcodeScript", api), n)
+            for a, r, n in BUNDLE_EDITS]
+
+
+def has_box_card(js):
+    return re.search(r'components:\{PrinterStatusCard:[\w$]+,BoxCard:', js) is not None
+
+
+def restore_box_card(js):
+    """Qidi firmware 01.01.03.04 (index-nyEzQB9T.js) no longer registers the dashboard
+    card that hosts the Material Control panel: the panel and its wrapper are still in
+    the bundle, only the card render and its Dashboard entry were dropped. Rebuild them
+    exactly as in index-DlFvHGAh.js. Builds that still have the card are left alone."""
+    if has_box_card(js):
+        return js
+    wrap = re.search(r'let ([\w$]+)=class extends \$\{\};\1=[\w$]+\(\[[\w$]+\(\{components:\{Box:[\w$]+\}\}\)\],\1\);', js)
+    card = re.search(r't\(([\w$]+),\{attrs:\{title:e\.\$t\("app\.general\.title\.jobs"\)', js)
+    norms = re.findall(r'=([\w$]+)\([\w$]+,[\w$]+,[\w$]+,!1,null,', js)
+    dash = re.search(r'components:\{PrinterStatusCard:[\w$]+,', js)
+    if not (wrap and card and norms and dash) or js.count(wrap.group(0)) != 1 or js.count(dash.group(0)) != 1:
+        fail("The Material Box dashboard card is missing from this Fluidd build and could not be rebuilt.\n"
+             "        Nothing was changed. Run with --check and open an issue.")
+    norm = max(set(norms), key=norms.count)
+    render = ('var qdBoxCardRender=function(){var e=this,t=e._self._c;return t(%s,{attrs:{'
+              'title:e.$t("app.box.label.title"),"help-tooltip":e.$t("app.box.tooltip.control_filament"),'
+              'icon:"$abacus",draggable:"","layout-path":"dashboard.box-card"}},[t("box")],1)};'
+              'const qdBoxCard=%s(%s,qdBoxCardRender,[],!1,null,null).exports;' % (card.group(1), norm, wrap.group(1)))
+    js = js.replace(wrap.group(0), wrap.group(0) + render)
+    return js.replace(dash.group(0), dash.group(0) + "BoxCard:qdBoxCard,")
+
+
 def patch_bundle(js):
-    for anchor, repl, expected in BUNDLE_EDITS:
+    members = js_members().replace("I.printerGcodeScript", gcode_api(js))
+    for anchor, repl, expected in build_edits(js):
         found = js.count(anchor)
         if found != expected:
             fail("Target code block not found (expected %d, found %d): %s...\n"
                  "        Firmware/Fluidd version may differ. Nothing was changed. "
                  "Run with --check and open an issue." % (expected, found, anchor[:60]))
-        js = js.replace(anchor, repl.replace("__QD_MEMBERS__", js_members()))
-    return js
+        js = js.replace(anchor, repl.replace("__QD_MEMBERS__", members))
+    return restore_box_card(js)
 
 
 def patch_sw(sw, bundle):
@@ -378,10 +420,12 @@ def check():
         js = factory_text(bpath)
         if js is None:
             raise ValueError("patched file without factory backup")
-        missing = [a[:50] for a, _, n in BUNDLE_EDITS if js.count(a) != n]
+        missing = [a[:50] for a, _, n in build_edits(js) if js.count(a) != n]
         if missing:
             raise ValueError("code blocks not found: " + "; ".join(missing))
         rows.append(("Fluidd patch", "applied (V2)" if VERSION in read_text(bpath) else "fits"))
+        rows.append(("Material Box card", "in the factory bundle" if has_box_card(js)
+                     else "removed by Qidi, rebuilt by the patch"))
     except SystemExit:
         rows.append(("Fluidd patch", "Fluidd not found"))
         problems.append("Fluidd bundle not found")

@@ -21,6 +21,8 @@ Since 01.01.03.01 firmware update, Qidi updated the internal multi-color subsyst
 - Slot edits go through a new command, `UPDATE_FILAMENT_INFORMATION` (the one Qidi Studio sends).
 - Sensor reporting fields (`b_endstop_state`) were relocated to `multi_color_controller.box`, which only reports changed fields.
 
+With firmware 01.01.03.04, Qidi also ships a new Fluidd build (`index-nyEzQB9T.js`) where the Material Control card was removed from the dashboard: the panel code is still in the bundle, but nothing displays it anymore.
+
 Because Fluidd's bundled frontend expected the legacy schema, the integrated Material Control widget exhibited several issues:
 - Empty or missing filament color and type indicators.
 - Missing third-party filament vendors available on the touchscreen (Bambu, Polymaker, HATCHBOX, Overture).
@@ -39,7 +41,8 @@ This patch modifies the client-side JavaScript bundle (`/home/qidi/fluidd/assets
 5. **Working controls**: Load / Unload / Eject / Read RFID send the new commands; `multi_color_controller` updates are merged so Unload and the pre-print check work again.
 6. **Cache refresh**: `sw.js` gets a new revision so browsers load the patched bundle instead of a cached one.
 7. **No backend modifications**: Klipper binaries, Cython shared libraries, and configuration files remain untouched. The patcher only adds one hidden link, `~/printer_data/config/.qidi_filaments`, pointing to Qidi's filament database (read-only use).
-8. **Safety and reversibility**: The patcher checks every code block before writing (nothing is changed if one does not match), creates `.bak` factory copies, and is safe to run again. Upgrading from V1 is automatic.
+8. **Material Box card restored (firmware 01.01.03.04)**: when the Fluidd build no longer registers the dashboard card, the patcher rebuilds it exactly as in the previous build (same title, icon and layout entry). Minified names that change between builds are detected automatically. Builds that still have the card are left untouched.
+9. **Safety and reversibility**: The patcher checks every code block before writing (nothing is changed if one does not match), creates `.bak` factory copies, and is safe to run again. Upgrading from V1 is automatic.
 
 ---
 
@@ -67,6 +70,8 @@ curl -sSL https://raw.githubusercontent.com/Greg-LFT/Qidi-Q2-Fluidd-widget-box-r
 Close **every** Fluidd tab, reopen Fluidd, then perform a hard refresh:
 - **Windows / Linux**: `Ctrl + F5` or `Ctrl + Shift + R`
 - **macOS**: `Cmd + Shift + R`
+
+If the Material Control card does not appear on the dashboard, enable it again from the dashboard layout settings.
 
 ---
 
@@ -103,7 +108,9 @@ After a Qidi firmware update, Fluidd is usually replaced and the patch removed: 
 ## Compatibility
 
 - **Hardware**: Qidi Q2 (and systems using the Qidi Box V2 multi-color module).
-- **Target File**: `/home/qidi/fluidd/assets/index-*.js` (Fluidd v1.30.5 shipped by Qidi, `index-DlFvHGAh.js`).
+- **Target File**: `/home/qidi/fluidd/assets/index-*.js` (Fluidd v1.30.5 shipped by Qidi):
+  - `index-DlFvHGAh.js` (firmware 01.01.03.01 / 01.01.03.02)
+  - `index-nyEzQB9T.js` (firmware 01.01.03.04, Material Control card rebuilt by the patch)
 
 ### Known limitations
 - Printing from Fluidd's own slot-mapping dialog still uses the legacy data. Start multi-color prints from Qidi Studio.
