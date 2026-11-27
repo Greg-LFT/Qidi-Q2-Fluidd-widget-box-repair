@@ -8,7 +8,7 @@ This project was developed with the assistance of AI for reverse-engineering the
 
 ## Credits
 
-Versions 2 and 3 build on the approach of [Assur92/qidi-max4-fluidd-box-fix](https://github.com/Assur92/qidi-max4-fluidd-box-fix) (GPL-3.0): reading the live `box_extras.filament_info` data, writing with `UPDATE_FILAMENT_INFORMATION`, merging `multi_color_controller` updates recursively, bumping the `sw.js` revision, and matching print-start dialog slots by `filament_type`. Thanks!
+Versions 2 to 4 build on the approach of [Assur92/qidi-max4-fluidd-box-fix](https://github.com/Assur92/qidi-max4-fluidd-box-fix) (GPL-3.0): reading the live `box_extras.filament_info` data, writing with `UPDATE_FILAMENT_INFORMATION`, merging `multi_color_controller` updates recursively, bumping the `sw.js` revision, and matching print-start dialog slots by `filament_type`. Thanks!
 
 ---
 
@@ -21,7 +21,7 @@ Since 01.01.03.01 firmware update, Qidi updated the internal multi-color subsyst
 - Slot edits go through a new command, `UPDATE_FILAMENT_INFORMATION` (the one Qidi Studio sends).
 - Sensor reporting fields (`b_endstop_state`) were relocated to `multi_color_controller.box`, which only reports changed fields.
 
-With firmware 01.01.03.04, Qidi also ships a new Fluidd build (`index-nyEzQB9T.js`) where the Material Control card was removed from the dashboard: the panel code is still in the bundle, but nothing displays it anymore.
+With firmware 01.01.03.04, Qidi also ships a new Fluidd build (`index-nyEzQB9T.js`) where the Material Control card was removed from the dashboard, and so was the print-start dialog that lets you check each tool's slot before printing: their code is still in the bundle, but nothing displays them anymore.
 
 Because Fluidd's bundled frontend expected the legacy schema, the integrated Material Control widget exhibited several issues:
 - Empty or missing filament color and type indicators.
@@ -39,11 +39,12 @@ This patch modifies the client-side JavaScript bundle (`/home/qidi/fluidd/assets
 3. **Dynamic Filament Filtering**: Selecting a vendor filters the filament dropdown to that brand's catalog, keeping the same material type when available (e.g. QIDI PLA Basic → Bambu PLA).
 4. **Native synchronization**: Edits from Fluidd are sent with `UPDATE_FILAMENT_INFORMATION`, so the touchscreen, Qidi Studio and print temperatures stay in sync.
 5. **Working controls**: Load / Unload / Eject / Read RFID send the new commands; `multi_color_controller` partial updates are merged at every nesting level, so Unload, the pre-print check and the Rack material stay correct after a change.
-6. **Print-start dialog**: the file's materials are matched to box slots using the live `filament_type`, so slots no longer show `?` and **Print** is no longer blocked.
+6. **Print-start dialog**: the file's materials are matched to box slots using the live `filament_type`, so slots no longer show `?` and **Print** is no longer blocked. The slot list offered for each tool is filtered by that type.
 7. **Cache refresh**: `sw.js` gets a new revision so browsers load the patched bundle instead of a cached one.
 8. **No backend modifications**: Klipper binaries, Cython shared libraries, and configuration files remain untouched. The patcher only adds one hidden link, `~/printer_data/config/.qidi_filaments`, pointing to Qidi's filament database (read-only use).
 9. **Material Box card restored (firmware 01.01.03.04)**: when the Fluidd build no longer registers the dashboard card, the patcher rebuilds it exactly as in the previous build (same title, icon and layout entry). Minified names that change between builds are detected automatically. Builds that still have the card are left untouched.
-10. **Safety and reversibility**: The patcher checks every code block before writing (nothing is changed if one does not match), creates `.bak` factory copies, and is safe to run again. Upgrading from V1 or V2 is automatic.
+10. **Print-start dialog restored (firmware 01.01.03.04)**: when the Fluidd build no longer shows the dialog, the patcher rebuilds it as in the previous build and opens it again from Print, Reprint and Upload & Print, as long as a box is configured. As before, it shows the file's tools with their materials and colours, proposes a matching slot for each, saves the choice (`SAVE_VARIABLE VARIABLE=value_tN`) and starts the print. After an upload, it waits up to 10 s for Moonraker to read the file, then prints directly if the file has no tool information. Builds that still have the dialog are left untouched.
+11. **Safety and reversibility**: The patcher checks every code block before writing (nothing is changed if one does not match), creates `.bak` factory copies, and is safe to run again. Upgrading from V1, V2 or V3 is automatic.
 
 ---
 
@@ -111,7 +112,7 @@ After a Qidi firmware update, Fluidd is usually replaced and the patch removed: 
 - **Hardware**: Qidi Q2 (and systems using the Qidi Box V2 multi-color module).
 - **Target File**: `/home/qidi/fluidd/assets/index-*.js` (Fluidd v1.30.5 shipped by Qidi):
   - `index-DlFvHGAh.js` (firmware 01.01.03.01 / 01.01.03.02)
-  - `index-nyEzQB9T.js` (firmware 01.01.03.04, Material Control card rebuilt by the patch)
+  - `index-nyEzQB9T.js` (firmware 01.01.03.04, Material Control card and print-start dialog rebuilt by the patch)
 
 ---
 
