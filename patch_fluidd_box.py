@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Fluidd Material Box Patch for Qidi Q2 - V3
+Fluidd Material Box Patch for Qidi Q2 - V4
 Repository: https://github.com/Greg-LFT/Qidi-Q2-Fluidd-widget-box-repair
 License: GPL-3.0 (same as Fluidd, which this patches)
 
@@ -36,7 +36,7 @@ import sys
 import tempfile
 import urllib.request
 
-VERSION = "qdv2-3"
+VERSION = "qdv2-4"
 # Markers used to recognise a file that is not the factory original:
 # V2/V3 of this script (qdv2-*), V1 of this repository, Assur92's patch.
 MARKERS = ("qdv2-", "_qFilaCat", "qd-box-fix-")
@@ -321,6 +321,168 @@ def restore_box_card(js):
     return js.replace(dash.group(0), dash.group(0) + "BoxCard:qdBoxCard,")
 
 
+# ---------------------------------------------------------------------------
+# Print-start dialog (slot selection) for Fluidd builds where Qidi removed it.
+# ---------------------------------------------------------------------------
+# Qidi firmware 01.01.03.04 (index-nyEzQB9T.js) still ships the dialog class (slot
+# matching, SAVE_VARIABLE value_tN, print start) and the places that host it, but no
+# longer renders it, registers it or opens it: Print, Reprint and Upload & Print start
+# the job directly. Its render function is rebuilt from index-DlFvHGAh.js (01.01.03.02),
+# with the minified component names of the current build resolved by their signature.
+_VUE_SIGS = {
+    "VSpacer": r'([\w$]+)=[\w$]+\("spacer","div","v-spacer"\)',
+    "VCardText": r'([\w$]+)=[\w$]+\("v-card__text"\)',
+    "VRow": r'([\w$]+)=[\w$]+\.extend\(\{name:"v-row"',
+    "VCol": r'([\w$]+)=[\w$]+\.extend\(\{name:"v-col"',
+    "VAlert": r'([\w$]+)=[\w$]+\([^)]*\)\.extend\(\{name:"v-alert"',
+    "VImg": r'([\w$]+)=[\w$]+\([^)]*\)\.extend\(\{name:"v-img"',
+    "VCard": r'([\w$]+)=[\w$]+\([^)]*\)\.extend\(\{name:"v-card",',
+    "VIcon": r'([\w$]+)=[\w$]+\.extend\(\{name:"v-icon"',
+    "VCheckbox": r'([\w$]+)=[\w$]+\.extend\(\{name:"v-checkbox"',
+}
+_APP_RENDERS = {
+    "AppDialog": r'([\w$]+)=function\(\)\{var e=this,t=e\._self\._c;return e\._self\._setupProxy,t\([\w$]+,'
+                 r'e\._b\(\{attrs:\{scrollable:e\.scrollable,fullscreen:e\.isMobileViewport',
+    "AppBtn": r'([\w$]+)=function\(\)\{var e=this,t=e\._self\._c;return e\._self\._setupProxy,t\([\w$]+,'
+              r'e\._g\(e\._b\(\{class:e\.classes\}',
+    "AppHelpTip": r'([\w$]+)=function\(\)\{var e=this,t=e\._self\._c;return e\._self\._setupProxy,t\([\w$]+,'
+                  r'\{attrs:\{bottom:e\.bottom,top:e\.top,left:e\.left,right:e\.right\}',
+}
+# Render function of the dialog in index-DlFvHGAh.js, component names as @Name@.
+_SELECT_DIALOG_RENDER = (
+    'function(){var e=this,t=e._self._c;return e._self._setupProxy,t(@AppDialog@,{attrs:{title:e.title,"max-width":"400"},'
+    'scopedSlots:e._u([{key:"actions",fn:function(){return[t(@VSpacer@),t(@AppBtn@,{attrs:{type:"button"},on:{click:'
+    'function(s){return e.handleCancel()}}},[e._v(" "+e._s(e.$t("app.general.btn.cancel"))+" ")]),t(@AppBtn@,{attrs:'
+    '{color:"primary",disabled:!e.isOkPrinter,type:"button"},on:{click:function(s){return e.handlePrint()}}},[e._v(" "+'
+    'e._s(e.$t("app.general.btn.print"))+" ")])]},proxy:!0}]),model:{value:e.open,callback:function(s){e.open=s},'
+    'expression:"open"}},[t(@VCardText@,[t(@VRow@,[t(@VCol@,[e.isOkPrinter?e._e():t(@VAlert@,{attrs:{text:"",outlined:"",'
+    'border:"left","colored-border":"",color:e.$vuetify.theme.currentTheme.primary}},[e._v(e._s(e.error_msg))])],1)],1),'
+    't(@VRow@,[t(@VCol@,[t("div",{staticClass:"image-container"},[t(@VImg@,{staticClass:"mb-4",attrs:{src:e.url||e.imgUrl,'
+    'alt:"Filesystem Image","max-height":"150","max-width":"150"}}),t(@AppHelpTip@,{attrs:{bottom:"",small:"",tooltip:'
+    'e.$t("app.file_system.tooltip.tip")}})],1)])],1),t(@VRow@,[t(@VCol@,[t(@VCard@,{attrs:{outlined:""}},[t(@VRow@,'
+    '[t(@VCol@,{attrs:{align:"center"}},[t(@VIcon@,[e._v("$clock")]),e._v(" "+e._s(e.formatSeconds(e.fileMeta.estimated_time))'
+    '+" ")],1),t(@VCol@,{attrs:{align:"center"}},[t(@VIcon@,[e._v("$gold")]),e._v(" "+e._s(e.fileMeta.filament_weight_total'
+    '||"?")+" g ")],1)],1),t(@VCardText@,[e.enableBox?t("file-system-select-line",{attrs:{"used-extruders":e.usedExtruders,'
+    '"file-colors":e.filecolors,"file-labels":e.filelabels,items:e.items,"selected-value-slot":e.selectedValueSlot},'
+    'on:{"value-change":e.onValueChange}}):t("file-system-out-select-line",{attrs:{"used-extruders":e.usedExtruders,'
+    '"file-colors":e.filecolors,"file-labels":e.filelabels}})],1)],1)],1)],1),t(@VRow@,{attrs:{height:"40px"}},[t(@VCol@,'
+    '{attrs:{cols:"auto"}},[t(@VCheckbox@,{attrs:{"hide-details":"auto",dense:""},scopedSlots:e._u([{key:"label",fn:'
+    'function(){return[t("span",{staticClass:"label-text"},[e._v(e._s(e.$t("app.file_system.label.enable_box")))])]},'
+    'proxy:!0}]),model:{value:e.enableBox,callback:function(s){e.enableBox=s},expression:"enableBox"}})],1)],1)],1)],1)}'
+)
+_BOX_ON = 'this.$store.state.printer.printer.save_variables.variables.box_count'
+# After an upload Moonraker needs a moment to read the file (used_extruders): wait for it,
+# then open the dialog; without it after 10 s, print directly as Upload & Print asks.
+QD_OPEN = ('async qdOpenSelectDialog(qr,qf){const qm=()=>this.$store.getters["files/getFileMeta"](qr,qf);'
+           'for(let i=0;i<40&&!(qm()&&qm().used_extruders);i++)await new Promise(qz=>setTimeout(qz,250));'
+           'if(this.$store.getters["files/getCanPrint"](qr,qf)){this.FileSystemSelectLineDialogState={open:!0,filename:qf};return}'
+           '__QD_API__.printerPrintStart(qf)}')
+# Lazy registration: the dialog is defined after some of its hosts in the bundle.
+_LAZY_DIALOG = 'FileSystemSelectLineDialog:function(qr){qr(qdSelectDialog)}'
+
+
+def _norm_name(js):
+    norms = re.findall(r'=([\w$]+)\([\w$]+,[\w$]+,[\w$]+,!1,null,', js)
+    return max(set(norms), key=norms.count) if norms else None
+
+
+def _resolve_components(js, norm):
+    names = {}
+    for key, pat in _VUE_SIGS.items():
+        found = re.findall(pat, js)
+        names[key] = found[0] if len(found) == 1 else None
+    for key, pat in _APP_RENDERS.items():
+        render = re.findall(pat, js)
+        wrapped = re.findall(r'([\w$]+)=' + re.escape(norm) + r'\([\w$]+,' + re.escape(render[0])
+                             + r',[\w$]+,!1,null,', js) if len(render) == 1 else []
+        export = re.findall(r'const ([\w$]+)=' + re.escape(wrapped[0]) + r'\.exports', js) if len(wrapped) == 1 else []
+        names[key] = export[0] if len(export) == 1 else None
+    return names
+
+
+def _print_dialog_edits():
+    """(regex, replacement builder) list hooking Print, Reprint and Upload & Print."""
+    return [
+        # Dashboard Reprint: spoolman check, then print.
+        (r'(spoolman/setDialogState",\{show:!0,filename:([\w$]+)\}\);return\})([\w$]+\.printerPrintStart\(\2\)\}\})',
+         lambda m: m.group(1) + 'if(%s&&this.$store.getters["files/getCanPrint"]("gcodes",%s))'
+         '{this.FileSystemSelectLineDialogState={open:!0,filename:%s};return}' % (_BOX_ON, m.group(2), m.group(2)) + m.group(3)),
+        # File browser Print.
+        (r'(spoolman/setDialogState",\{show:!0,filename:([\w$]+)\}\);return\})([\w$]+\.printerPrintStart\(\2\),this\.\$router)',
+         lambda m: m.group(1) + 'if(%s&&this.$store.getters["files/getCanPrint"](this.currentRoot,%s))'
+         '{this.FileSystemSelectLineDialogState={open:!0,filename:%s};return}' % (_BOX_ON, m.group(2), m.group(2)) + m.group(3)),
+        # File browser upload ("upload and print" when s is true).
+        (r'async handleUpload\(([\w$]+),([\w$]+)\)\{const ([\w$]+)=(`\$\{this\.\$waits\.onFileSystem\}/\$\{this\.currentPath\}/`);'
+         r'this\.\$store\.dispatch\("wait/addWait",\3\),await this\.uploadFiles\(\1,this\.visiblePath,this\.currentRoot,\2\),'
+         r'this\.\$store\.dispatch\("wait/removeWait",\3\)\}',
+         lambda m: ('async handleUpload(%(t)s,%(s)s){const %(n)s=%(w)s;this.$store.dispatch("wait/addWait",%(n)s);'
+                    'if(%(box)s&&%(s)s){await this.uploadFiles(%(t)s,this.visiblePath,this.currentRoot,!1);let qf="";'
+                    'for(const qo of %(t)s){const[ql,qc]=this.getFullPathAndFile(this.visiblePath,qo);qf=ql?`${ql}/${qc.name}`:qc.name}'
+                    'this.$store.dispatch("wait/removeWait",%(n)s);await this.qdOpenSelectDialog(this.currentRoot,qf);return}'
+                    'await this.uploadFiles(%(t)s,this.visiblePath,this.currentRoot,%(s)s);'
+                    'this.$store.dispatch("wait/removeWait",%(n)s)}' + QD_OPEN)
+         % {"t": m.group(1), "s": m.group(2), "n": m.group(3), "w": m.group(4), "box": _BOX_ON}),
+        # Top bar Upload & Print.
+        (r'handleUploadAndPrint\(([\w$]+)\)\{this\.uploadFile\(\1,"/","gcodes",!0\)\}',
+         lambda m: ('async handleUploadAndPrint(%(e)s){if(!%(box)s){this.uploadFile(%(e)s,"/","gcodes",!0);return}'
+                    'await this.uploadFile(%(e)s,"/","gcodes",!1);await this.qdOpenSelectDialog("gcodes",%(e)s.name)}' + QD_OPEN)
+         % {"e": m.group(1), "box": _BOX_ON}),
+    ]
+
+
+def _dialog_hosts():
+    """Component lists that render <file-system-select-line-dialog> (regex, expected count)."""
+    return [r'components:\{StatusControls:[\w$]+,StatusTab:[\w$]+,ReprintTab:[\w$]+',
+            r'FileSystemGoToFileDialog:[\w$]+,FilePreviewDialog:[\w$]+',
+            r'AppSaveConfigAndRestartBtn:[\w$]+,AppUploadAndPrintBtn:[\w$]+']
+
+
+def has_print_dialog(js):
+    return "FileSystemSelectLineDialog:" in js
+
+
+def restore_print_dialog(js, check_only=False):
+    """Rebuild and hook the slot-selection dialog when the build no longer has it.
+    Builds that still register it are left alone. With check_only, return the list
+    of problems instead of patching."""
+    if has_print_dialog(js):
+        return [] if check_only else js
+    problems = []
+    norm = _norm_name(js)
+    decl = re.findall(r'([\w$]+)=[\w$]+\(\[[\w$]+\(\{components:\{FileSystemSelectLine:[\w$]+,'
+                      r'FileSystemOutSelectLine:[\w$]+\}\}\)\],\1\);', js)
+    names = _resolve_components(js, norm) if norm else {}
+    problems += ["component " + k for k, v in names.items() if not v]
+    if not norm:
+        problems.append("normaliser")
+    if len(decl) != 1:
+        problems.append("dialog class")
+    edits = _print_dialog_edits()
+    problems += ["hook %d" % i for i, (p, _) in enumerate(edits, 1) if len(re.findall(p, js)) != 1]
+    problems += ["host %d" % i for i, p in enumerate(_dialog_hosts(), 1) if len(re.findall(p, js)) != 1]
+    if check_only:
+        return problems
+    if problems:
+        fail("The print-start dialog could not be rebuilt in this Fluidd build (%s).\n"
+             "        Nothing was changed. Run with --check and open an issue." % ", ".join(problems))
+    cls = decl[0]
+    api = re.search(r'([\w$]+)\.printerPrintStart\(', js).group(1)
+    render = _SELECT_DIALOG_RENDER
+    for key, value in names.items():
+        render = render.replace("@%s@" % key, value)
+    stmt = re.search(r'%s=[\w$]+\(\[[\w$]+\(\{components:\{FileSystemSelectLine:[\w$]+,FileSystemOutSelectLine:[\w$]+\}\}\)\],%s\);'
+                     % (re.escape(cls), re.escape(cls)), js).group(0)
+    js = js.replace(stmt, stmt + 'var qdSelectDialogRender=%s;const qdSelectDialog=%s(%s,qdSelectDialogRender,[],!1,null,'
+                    '"d6f4b985").exports;' % (render, norm, cls))
+    for pattern in _dialog_hosts():
+        m = re.search(pattern, js)
+        js = js[:m.end()] + "," + _LAZY_DIALOG + js[m.end():]
+    for pattern, build_repl in edits:
+        m = re.search(pattern, js)
+        js = js[:m.start()] + build_repl(m).replace("__QD_API__", api) + js[m.end():]
+    return js
+
+
 def patch_bundle(js):
     members = js_members().replace("I.printerGcodeScript", gcode_api(js))
     for anchor, repl, expected in build_edits(js):
@@ -330,7 +492,7 @@ def patch_bundle(js):
                  "        Firmware/Fluidd version may differ. Nothing was changed. "
                  "Run with --check and open an issue." % (expected, found, anchor[:60]))
         js = js.replace(anchor, repl.replace("__QD_MEMBERS__", members))
-    return restore_box_card(fix_print_dialog(js))
+    return restore_print_dialog(restore_box_card(fix_print_dialog(js)))
 
 
 def patch_sw(sw, bundle):
@@ -429,7 +591,7 @@ def patch(dry_run=False):
         print("[OK] Patched: %s" % path)
 
     ensure_db_link()
-    print("[OK] Material Box patch V3 successfully applied.")
+    print("[OK] Material Box patch V4 successfully applied.")
     print("[INFO] Close every Fluidd tab, reopen Fluidd and hard-refresh your browser (Ctrl+F5).")
 
 
@@ -468,10 +630,13 @@ def check():
             raise ValueError("patched file without factory backup")
         missing = [a[:50] for a, _, n in build_edits(js) if js.count(a) != n]
         missing += ["print dialog: " + p[:40] for p, _ in PRINT_DIALOG_EDITS if len(re.findall(p, js)) != 1]
+        missing += ["print-start dialog rebuild: " + p for p in restore_print_dialog(js, check_only=True)]
         if missing:
             raise ValueError("code blocks not found: " + "; ".join(missing))
         rows.append(("Fluidd patch", "applied (%s)" % VERSION if VERSION in read_text(bpath) else "fits"))
         rows.append(("Material Box card", "in the factory bundle" if has_box_card(js)
+                     else "removed by Qidi, rebuilt by the patch"))
+        rows.append(("Print-start dialog", "in the factory bundle" if has_print_dialog(js)
                      else "removed by Qidi, rebuilt by the patch"))
     except SystemExit:
         rows.append(("Fluidd patch", "Fluidd not found"))
@@ -511,7 +676,7 @@ def check():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Fluidd Material Box Patch for Qidi Q2 - V3")
+    ap = argparse.ArgumentParser(description="Fluidd Material Box Patch for Qidi Q2 - V4")
     ap.add_argument("action", nargs="?", choices=["restore"], help="same as --restore")
     ap.add_argument("--restore", "-r", action="store_true", help="restore the factory files from .bak")
     ap.add_argument("--dry-run", action="store_true", help="check that the patch fits, change nothing")
