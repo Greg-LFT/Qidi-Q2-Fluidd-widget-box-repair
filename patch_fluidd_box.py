@@ -36,7 +36,7 @@ import sys
 import tempfile
 import urllib.request
 
-VERSION = "qdv2-4"
+VERSION = "qdv2-5"
 # Markers used to recognise a file that is not the factory original:
 # V2/V3 of this script (qdv2-*), V1 of this repository, Assur92's patch.
 MARKERS = ("qdv2-", "_qFilaCat", "qd-box-fix-")
@@ -371,12 +371,18 @@ _SELECT_DIALOG_RENDER = (
     'proxy:!0}]),model:{value:e.enableBox,callback:function(s){e.enableBox=s},expression:"enableBox"}})],1)],1)],1)],1)}'
 )
 _BOX_ON = 'this.$store.state.printer.printer.save_variables.variables.box_count'
-# After an upload Moonraker needs a moment to read the file (used_extruders): wait for it,
-# then open the dialog; without it after 10 s, print directly as Upload & Print asks.
-QD_OPEN = ('async qdOpenSelectDialog(qr,qf){const qm=()=>this.$store.getters["files/getFileMeta"](qr,qf);'
-           'for(let i=0;i<40&&!(qm()&&qm().used_extruders);i++)await new Promise(qz=>setTimeout(qz,250));'
+# Qidi only opens the dialog when Fluidd already knows the file's tools (used_extruders),
+# which needs the file's folder loaded in the file store: it is not when the dashboard
+# has no Jobs card, and the print then started without the dialog. The folder is loaded
+# when missing, then the dialog opens; after an upload (qu), Moonraker's analysis is
+# awaited too. Without the information after 10 s, the print starts directly as before.
+QD_OPEN = ('async qdOpenSelectDialog(qr,qf,qu){const qm=()=>this.$store.getters["files/getFileMeta"](qr,qf),'
+           'qd=(qr+"/"+qf).substring(0,(qr+"/"+qf).lastIndexOf("/")),'
+           'qk=()=>{const m=qm();return m&&(!qu||m.used_extruders||m.slicer)};'
+           'qm()||__QD_API__.serverFilesGetDirectory(qr,qd);'
+           'for(let i=0;i<40&&!qk();i++)await new Promise(qz=>setTimeout(qz,250));'
            'if(this.$store.getters["files/getCanPrint"](qr,qf)){this.FileSystemSelectLineDialogState={open:!0,filename:qf};return}'
-           '__QD_API__.printerPrintStart(qf)}')
+           '__QD_API__.printerPrintStart(qf),this.$router.currentRoute.path!=="/"&&this.$router.push({path:"/"})}')
 # Lazy registration: the dialog is defined after some of its hosts in the bundle.
 _LAZY_DIALOG = 'FileSystemSelectLineDialog:function(qr){qr(qdSelectDialog)}'
 
@@ -404,13 +410,13 @@ def _print_dialog_edits():
     """(regex, replacement builder) list hooking Print, Reprint and Upload & Print."""
     return [
         # Dashboard Reprint: spoolman check, then print.
-        (r'(spoolman/setDialogState",\{show:!0,filename:([\w$]+)\}\);return\})([\w$]+\.printerPrintStart\(\2\)\}\})',
-         lambda m: m.group(1) + 'if(%s&&this.$store.getters["files/getCanPrint"]("gcodes",%s))'
-         '{this.FileSystemSelectLineDialogState={open:!0,filename:%s};return}' % (_BOX_ON, m.group(2), m.group(2)) + m.group(3)),
+        (r'(spoolman/setDialogState",\{show:!0,filename:([\w$]+)\}\);return\})([\w$]+\.printerPrintStart\(\2\)\})\}',
+         lambda m: m.group(1) + 'if(%s){this.qdOpenSelectDialog("gcodes",%s);return}' % (_BOX_ON, m.group(2))
+         + m.group(3) + QD_OPEN + "}"),
         # File browser Print.
         (r'(spoolman/setDialogState",\{show:!0,filename:([\w$]+)\}\);return\})([\w$]+\.printerPrintStart\(\2\),this\.\$router)',
-         lambda m: m.group(1) + 'if(%s&&this.$store.getters["files/getCanPrint"](this.currentRoot,%s))'
-         '{this.FileSystemSelectLineDialogState={open:!0,filename:%s};return}' % (_BOX_ON, m.group(2), m.group(2)) + m.group(3)),
+         lambda m: m.group(1) + 'if(%s){this.qdOpenSelectDialog(this.currentRoot,%s);return}' % (_BOX_ON, m.group(2))
+         + m.group(3)),
         # File browser upload ("upload and print" when s is true).
         (r'async handleUpload\(([\w$]+),([\w$]+)\)\{const ([\w$]+)=(`\$\{this\.\$waits\.onFileSystem\}/\$\{this\.currentPath\}/`);'
          r'this\.\$store\.dispatch\("wait/addWait",\3\),await this\.uploadFiles\(\1,this\.visiblePath,this\.currentRoot,\2\),'
@@ -418,14 +424,14 @@ def _print_dialog_edits():
          lambda m: ('async handleUpload(%(t)s,%(s)s){const %(n)s=%(w)s;this.$store.dispatch("wait/addWait",%(n)s);'
                     'if(%(box)s&&%(s)s){await this.uploadFiles(%(t)s,this.visiblePath,this.currentRoot,!1);let qf="";'
                     'for(const qo of %(t)s){const[ql,qc]=this.getFullPathAndFile(this.visiblePath,qo);qf=ql?`${ql}/${qc.name}`:qc.name}'
-                    'this.$store.dispatch("wait/removeWait",%(n)s);await this.qdOpenSelectDialog(this.currentRoot,qf);return}'
+                    'this.$store.dispatch("wait/removeWait",%(n)s);await this.qdOpenSelectDialog(this.currentRoot,qf,!0);return}'
                     'await this.uploadFiles(%(t)s,this.visiblePath,this.currentRoot,%(s)s);'
                     'this.$store.dispatch("wait/removeWait",%(n)s)}' + QD_OPEN)
          % {"t": m.group(1), "s": m.group(2), "n": m.group(3), "w": m.group(4), "box": _BOX_ON}),
         # Top bar Upload & Print.
         (r'handleUploadAndPrint\(([\w$]+)\)\{this\.uploadFile\(\1,"/","gcodes",!0\)\}',
          lambda m: ('async handleUploadAndPrint(%(e)s){if(!%(box)s){this.uploadFile(%(e)s,"/","gcodes",!0);return}'
-                    'await this.uploadFile(%(e)s,"/","gcodes",!1);await this.qdOpenSelectDialog("gcodes",%(e)s.name)}' + QD_OPEN)
+                    'await this.uploadFile(%(e)s,"/","gcodes",!1);await this.qdOpenSelectDialog("gcodes",%(e)s.name,!0)}' + QD_OPEN)
          % {"e": m.group(1), "box": _BOX_ON}),
     ]
 
