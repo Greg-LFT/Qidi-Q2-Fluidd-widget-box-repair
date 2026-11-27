@@ -8,7 +8,7 @@ This project was developed with the assistance of AI for reverse-engineering the
 
 ## Credits
 
-Version 2 builds on the approach of [Assur92/qidi-max4-fluidd-box-fix](https://github.com/Assur92/qidi-max4-fluidd-box-fix) (GPL-3.0): reading the live `box_extras.filament_info` data, writing with `UPDATE_FILAMENT_INFORMATION`, merging `multi_color_controller` updates and bumping the `sw.js` revision. Thanks!
+Versions 2 and 3 build on the approach of [Assur92/qidi-max4-fluidd-box-fix](https://github.com/Assur92/qidi-max4-fluidd-box-fix) (GPL-3.0): reading the live `box_extras.filament_info` data, writing with `UPDATE_FILAMENT_INFORMATION`, merging `multi_color_controller` updates recursively, bumping the `sw.js` revision, and matching print-start dialog slots by `filament_type`. Thanks!
 
 ---
 
@@ -38,11 +38,12 @@ This patch modifies the client-side JavaScript bundle (`/home/qidi/fluidd/assets
 2. **Firmware filament database**: Vendor and filament lists are read live from Qidi's own database (`/home/qidi/QIDI_Client/resource/filament_config/filament-<nozzle>.json`) for the configured nozzle. When Qidi adds or renames filaments or vendors, Fluidd follows automatically. A built-in catalogue (`QIDI`, `Generic`, `Bambu`, `Polymaker`, `HATCHBOX`, `Overture`) is used as fallback.
 3. **Dynamic Filament Filtering**: Selecting a vendor filters the filament dropdown to that brand's catalog, keeping the same material type when available (e.g. QIDI PLA Basic → Bambu PLA).
 4. **Native synchronization**: Edits from Fluidd are sent with `UPDATE_FILAMENT_INFORMATION`, so the touchscreen, Qidi Studio and print temperatures stay in sync.
-5. **Working controls**: Load / Unload / Eject / Read RFID send the new commands; `multi_color_controller` updates are merged so Unload and the pre-print check work again.
-6. **Cache refresh**: `sw.js` gets a new revision so browsers load the patched bundle instead of a cached one.
-7. **No backend modifications**: Klipper binaries, Cython shared libraries, and configuration files remain untouched. The patcher only adds one hidden link, `~/printer_data/config/.qidi_filaments`, pointing to Qidi's filament database (read-only use).
-8. **Material Box card restored (firmware 01.01.03.04)**: when the Fluidd build no longer registers the dashboard card, the patcher rebuilds it exactly as in the previous build (same title, icon and layout entry). Minified names that change between builds are detected automatically. Builds that still have the card are left untouched.
-9. **Safety and reversibility**: The patcher checks every code block before writing (nothing is changed if one does not match), creates `.bak` factory copies, and is safe to run again. Upgrading from V1 is automatic.
+5. **Working controls**: Load / Unload / Eject / Read RFID send the new commands; `multi_color_controller` partial updates are merged at every nesting level, so Unload, the pre-print check and the Rack material stay correct after a change.
+6. **Print-start dialog**: the file's materials are matched to box slots using the live `filament_type`, so slots no longer show `?` and **Print** is no longer blocked.
+7. **Cache refresh**: `sw.js` gets a new revision so browsers load the patched bundle instead of a cached one.
+8. **No backend modifications**: Klipper binaries, Cython shared libraries, and configuration files remain untouched. The patcher only adds one hidden link, `~/printer_data/config/.qidi_filaments`, pointing to Qidi's filament database (read-only use).
+9. **Material Box card restored (firmware 01.01.03.04)**: when the Fluidd build no longer registers the dashboard card, the patcher rebuilds it exactly as in the previous build (same title, icon and layout entry). Minified names that change between builds are detected automatically. Builds that still have the card are left untouched.
+10. **Safety and reversibility**: The patcher checks every code block before writing (nothing is changed if one does not match), creates `.bak` factory copies, and is safe to run again. Upgrading from V1 or V2 is automatic.
 
 ---
 
@@ -111,9 +112,6 @@ After a Qidi firmware update, Fluidd is usually replaced and the patch removed: 
 - **Target File**: `/home/qidi/fluidd/assets/index-*.js` (Fluidd v1.30.5 shipped by Qidi):
   - `index-DlFvHGAh.js` (firmware 01.01.03.01 / 01.01.03.02)
   - `index-nyEzQB9T.js` (firmware 01.01.03.04, Material Control card rebuilt by the patch)
-
-### Known limitations
-- Printing from Fluidd's own slot-mapping dialog still uses the legacy data. Start multi-color prints from Qidi Studio.
 
 ---
 
