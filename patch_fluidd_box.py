@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Fluidd Material Box Patch for Qidi Q2 - V2
+Fluidd Material Box Patch for Qidi Q2 - V3
 Repository: https://github.com/Greg-LFT/Qidi-Q2-Fluidd-widget-box-repair
 License: GPL-3.0 (same as Fluidd, which this patches)
 
 Developed with AI assistance and validated on Qidi Q2 hardware.
 
-V2 approach credit: reading box_extras.filament_info, writing with
-UPDATE_FILAMENT_INFORMATION, merging multi_color_controller updates and bumping
-the sw.js revision come from Assur92's qidi-max4-fluidd-box-fix (GPL-3.0):
+Approach credit: reading box_extras.filament_info, writing with
+UPDATE_FILAMENT_INFORMATION, merging multi_color_controller updates (recursively),
+bumping the sw.js revision and matching print-start dialog slots by filament_type
+come from Assur92's qidi-max4-fluidd-box-fix (GPL-3.0):
 https://github.com/Assur92/qidi-max4-fluidd-box-fix
 
 Copyright (C) 2026 Greg-LFT
@@ -35,9 +36,9 @@ import sys
 import tempfile
 import urllib.request
 
-VERSION = "qdv2-2"
+VERSION = "qdv2-3"
 # Markers used to recognise a file that is not the factory original:
-# V2 (this script), V1 of this repository, Assur92's patch.
+# V2/V3 of this script (qdv2-*), V1 of this repository, Assur92's patch.
 MARKERS = ("qdv2-", "_qFilaCat", "qd-box-fix-")
 
 FLUIDD_DIRS = ["/home/qidi/fluidd", "/home/mks/fluidd", "/usr/share/fluidd"]
@@ -155,11 +156,14 @@ BUNDLE_EDITS = [
      "qe=qx.e_endstop_state!==void 0?qx.e_endstop_state:qf.filament_detected?1:0,"
      "qb=qx.b_endstop_state!==void 0?qx.b_endstop_state:((qp.multi_color_controller||{}).box||{}).b_endstop_state;"
      "return this.enableBox===!1?qe===1?qb===0?", 1),
-    # Store: multi_color_controller only sends changed fields, so merge them.
+    # Store: multi_color_controller only sends changed fields, at every nesting level
+    # (a Rack colour change sends extra.filament_info with the colour only), so objects
+    # are merged recursively; arrays and plain values are replaced.
     ("t[s]!==e.payload[s]&&$.set(r.printer[e.key],s,e.payload[s])",
-     "t[s]!==e.payload[s]&&$.set(r.printer[e.key],s,e.key===\"multi_color_controller\"&&t[s]&&e.payload[s]"
-     "&&typeof t[s]==\"object\"&&typeof e.payload[s]==\"object\"&&!Array.isArray(e.payload[s])"
-     "?Object.assign({},t[s],e.payload[s]):e.payload[s])", 1),
+     "t[s]!==e.payload[s]&&$.set(r.printer[e.key],s,e.key===\"multi_color_controller\""
+     "?function qdMerge(a,b){if(!a||!b||typeof a!=\"object\"||typeof b!=\"object\"||Array.isArray(a)"
+     "||Array.isArray(b))return b;const o=Object.assign({},a);for(const k in b)o[k]=qdMerge(a[k],b[k]);"
+     "return o}(t[s],e.payload[s]):e.payload[s])", 1),
 ]
 
 
@@ -248,6 +252,48 @@ def build_edits(js):
             for a, r, n in BUNDLE_EDITS]
 
 
+# Print-start dialog: slots were matched to the file's materials through the legacy
+# filament index, which no longer resolves on the new firmware: slots showed "?" and
+# Print stayed disabled. Each slot now carries the live colour and filament_type
+# (qdType) from box_extras, and every type comparison uses it first. Minified variable
+# names differ between Fluidd builds, so the anchors are regular expressions.
+# (regex, replacement builder taking the match)
+_V = r"([\w$]+)"
+PRINT_DIALOG_EDITS = [
+    (_V + r"\[" + _V + r"\]=\{label:" + _V + r",color:" + _V + r",filaIndex:" + _V + r"\}",
+     lambda m: ("%s[%s]=(()=>{const qb=((this.$store.state.printer.printer.box_extras||{}).boxes||[])"
+                "[Math.floor(%s/4)],qf=qb&&qb.filament_info&&qb.filament_info[%s%%4],"
+                "qo={label:%s,color:%s,filaIndex:%s};if(qf){const qc=String((qf.color_rgb_str||[])[0]||\"\")"
+                ".replace(\"#\",\"\");qc&&(qo.color=\"#\"+qc);qo.qdType=qf.filament_type}return qo})()"
+                % (m.group(1), m.group(2), m.group(2), m.group(2), m.group(3), m.group(4), m.group(5)))),
+    (r"if\(" + _V + r"===this\.officialFilasListDictData\[" + _V + r"\.filaIndex\]\.type\)",
+     lambda m: ("if(%s===(%s.qdType!==void 0?%s.qdType:(this.officialFilasListDictData[%s.filaIndex]||{}).type))"
+                % (m.group(1), m.group(2), m.group(2), m.group(2)))),
+    (r"this\.filelabels\[" + _V + r"\]!==this\.officialFilasListDictData\[\(" + _V
+     + r"=this\.selectedValueSlot\[\1\]\)==null\?void 0:\2\.filaIndex\]\.type",
+     lambda m: ("this.filelabels[%s]!==((%s=this.selectedValueSlot[%s])&&%s.qdType!==void 0?%s.qdType"
+                ":(this.officialFilasListDictData[%s==null?void 0:%s.filaIndex]||{}).type)"
+                % (m.group(1), m.group(2), m.group(1), m.group(2), m.group(2), m.group(2), m.group(2)))),
+    (r"return\(\(" + _V + r"=this\.officialFilasListDictData\[" + _V + r"\.filaIndex\]\)==null\?void 0:\1\.type\)"
+     r"===this\.fileLabels\[" + _V + r"\]",
+     lambda m: ("return(%s.qdType!==void 0?%s.qdType:(%s=this.officialFilasListDictData[%s.filaIndex])==null"
+                "?void 0:%s.type)===this.fileLabels[%s]"
+                % (m.group(2), m.group(2), m.group(1), m.group(2), m.group(1), m.group(3)))),
+]
+
+
+def fix_print_dialog(js):
+    for pattern, build_repl in PRINT_DIALOG_EDITS:
+        matches = list(re.finditer(pattern, js))
+        if len(matches) != 1:
+            fail("Print dialog code block not found (expected 1, found %d): %s...\n"
+                 "        Firmware/Fluidd version may differ. Nothing was changed. "
+                 "Run with --check and open an issue." % (len(matches), pattern[:60]))
+        m = matches[0]
+        js = js[:m.start()] + build_repl(m) + js[m.end():]
+    return js
+
+
 def has_box_card(js):
     return re.search(r'components:\{PrinterStatusCard:[\w$]+,BoxCard:', js) is not None
 
@@ -284,7 +330,7 @@ def patch_bundle(js):
                  "        Firmware/Fluidd version may differ. Nothing was changed. "
                  "Run with --check and open an issue." % (expected, found, anchor[:60]))
         js = js.replace(anchor, repl.replace("__QD_MEMBERS__", members))
-    return restore_box_card(js)
+    return restore_box_card(fix_print_dialog(js))
 
 
 def patch_sw(sw, bundle):
@@ -383,7 +429,7 @@ def patch(dry_run=False):
         print("[OK] Patched: %s" % path)
 
     ensure_db_link()
-    print("[OK] Material Box patch V2 successfully applied.")
+    print("[OK] Material Box patch V3 successfully applied.")
     print("[INFO] Close every Fluidd tab, reopen Fluidd and hard-refresh your browser (Ctrl+F5).")
 
 
@@ -421,9 +467,10 @@ def check():
         if js is None:
             raise ValueError("patched file without factory backup")
         missing = [a[:50] for a, _, n in build_edits(js) if js.count(a) != n]
+        missing += ["print dialog: " + p[:40] for p, _ in PRINT_DIALOG_EDITS if len(re.findall(p, js)) != 1]
         if missing:
             raise ValueError("code blocks not found: " + "; ".join(missing))
-        rows.append(("Fluidd patch", "applied (V2)" if VERSION in read_text(bpath) else "fits"))
+        rows.append(("Fluidd patch", "applied (%s)" % VERSION if VERSION in read_text(bpath) else "fits"))
         rows.append(("Material Box card", "in the factory bundle" if has_box_card(js)
                      else "removed by Qidi, rebuilt by the patch"))
     except SystemExit:
@@ -464,7 +511,7 @@ def check():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Fluidd Material Box Patch for Qidi Q2 - V2")
+    ap = argparse.ArgumentParser(description="Fluidd Material Box Patch for Qidi Q2 - V3")
     ap.add_argument("action", nargs="?", choices=["restore"], help="same as --restore")
     ap.add_argument("--restore", "-r", action="store_true", help="restore the factory files from .bak")
     ap.add_argument("--dry-run", action="store_true", help="check that the patch fits, change nothing")
